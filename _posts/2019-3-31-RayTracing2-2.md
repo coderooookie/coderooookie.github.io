@@ -3,7 +3,7 @@ title: Ray Tracing in the next week - Bouding Volume Hierarchies
 date: 2019-3-31 10:59
 categories:
 - 游戏开发
-- 图形渲染
+- Ray Tracing
 ---
 最近在看Ray Tracing 系列，打算继续写博客来记录相关内容。
 
@@ -22,6 +22,29 @@ else
     return false
 ```
 将物体划分为多个子集是非常关键的。各个物体只包围在（属于）某一个包围盒中，各个包围盒可以重复。
-![包围盒示意图](https://github.com/coderooookie/coderooookie.github.io/blob/master/img/2-2-1.jpg)
+![包围盒示意图](https://github.com/coderooookie/coderooookie.github.io/blob/master/img/2-2-1.png)
+
+因此，我们需要一个好方法来进行划分，让包围盒足够紧凑。其次还需要一个方法来判断射线与包围盒子集相交，这得足够快。
+在实践中，AABB类型的碰撞盒是最好的，但是当有多重不同类型的复杂模型时，就不太适合用AABB的碰撞盒了。
+
+大多数人用slab的方法，就是将n个维度分别进行分析的AABB方法。
+具体来说就是考虑一个维度（例如x）里，射线 p = A + Bt 与x = x0,与x = x1的交点，求得tx0和tx1，得到一个范围（tx0, tx1)。其中tx0 = (x0 - A.x)/B.x
+接着分别求第二个维度（例如y）的范围(ty0, ty1)，进而判断两个范围（tx0, tx1)与(ty0, ty1) 是否有交集，有的话就说明在这个二维的区域中射线射中区域了。
+三维以及以上的类似。
+
+看起来这个方法很简单，不过这里有一些细节会让这个方法变得麻烦：
+- 例如当射线是往负方向的，这样求出来的范围需要表示为(tx1, tx0)。
+- 另外，如果射线与区域是平行的，即没有解的话，会得到NaN。
+- 如果方向向量B里面有某个值为0，那就会出现除数为0的情况。
+
+先不考虑上面几点，我们可以算出区域(d,D)与(e,E)的交集(f,F)：
+``` github
+bool overlap(d,D,e,E,f,F)
+    f = max(d,e)
+    F = min(D,E)
+    return (f < F)
+```
+
+
 
 
