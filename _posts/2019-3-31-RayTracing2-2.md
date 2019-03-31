@@ -22,6 +22,7 @@ else
     return false
 ```
 将物体划分为多个子集是非常关键的。各个物体只包围在（属于）某一个包围盒中，各个包围盒可以重复。
+
 ![包围盒示意图](https://github.com/coderooookie/coderooookie.github.io/blob/master/img/2-2-1.png)
 
 因此，我们需要一个好方法来进行划分，让包围盒足够紧凑。其次还需要一个方法来判断射线与包围盒子集相交，这得足够快。
