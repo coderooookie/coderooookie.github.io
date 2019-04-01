@@ -45,7 +45,172 @@ bool overlap(d,D,e,E,f,F)
     F = min(D,E)
     return (f < F)
 ```
+接下来，考虑实现aabb类如下代码。
+```c++
+inline float ffmin(float a, float b) {return a < b ? a : b;}
+inline float ffmax(float a, float b) {return a > b ? a : b;}
 
+class aabb {
+public:
+    aabb(){}
+    aabb(const vec3& a, const vec3& b){ _min = a; _max = b;}
 
+    vec3 min() const {return _min;}
+    vec3 max() const {return _max;}
 
+    bool hit(const ray& r, float tmin, float tmax) const {
+        for (int a = 0; a < 3; a++){
+            float t0 = ffmin((_min[a]-r.origin()[a])/r.direction()[a], (_max[a]-r.origin()[a])/r.direction()[a]);
+            float t1 = ffmax((_min[a]-r.origin()[a])/r.direction()[a], (_max[a]-r.origin()[a])/r.direction()[a]);
+            tmin = ffmax(t0, tmin);
+            tmax = ffmin(t1, tmax);
+            if (tmax <= tmin)
+                return false;
+        }
+        return true;
+        }
 
+    vec3 _min;
+    vec3 _max;
+};
+```
+
+核心就是aabb的hit方法。
+
+接着在原有的hitable类上增加虚函数。
+```c++
+class hitable {
+public:
+    virtual bool hit(const ray& r, float t_min, float t_max, hit_record& rec) const = 0;
+    virtual bool bounding_box(float t0, float t1, aabb& box) const = 0;
+};
+```
+`bounding_box`方法用于获取其包围盒，对于sphere类的实现如下。
+```c++
+bool sphere::bounding_box(float t0, float t1, aabb& box) const {
+    box = aabb(center - vec3(radius, radius, radius), center + vec3(radius, radius, radius));
+    return true;
+}
+```
+而对于`moving_sphere`类，而只需要考虑将两个aabb拼起来。
+```c++
+aabb surrounding_box(aabb box0, aabb box1){
+    vec3 small(fmin(box0.min().x(), box1.min().x()),
+    fmin(box0.min().y(), box1.min().y()),
+    fmin(box0.min().z(), box1.min().z()));
+    vec3 big(fmin(box0.max().x(), box1.max().x()),
+    fmin(box0.max().y(), box1.max().y()),
+    fmin(box0.max().z(), box1.max().z()));
+    return aabb(small, big);
+}
+```
+对于`hitable_list`类的话如下。
+```c++
+bool hitable_list::bounding_box(float t0, float t1, aabb& box) const {
+    if (list_size < 1) return false;
+    aabb temp_box;
+    bool first_true = list[0]->bounding_box(t0, t1, temp_box);
+    if (!first_true) return false;
+    else box = temp_box;
+    for (int i = 1; i < list_size;i++){
+        if (list[i]->bounding_box(t0, t1, temp_box)){
+            box = surrounding_box(box, temp_box);
+        }else{
+            return false;
+        }
+    }
+    return true;
+}
+```
+接下来要考虑比较关键的类`bvh_node`，也就是层次包围盒节点的类，这个类当然也应该是可以hit到的，因此继承`hitable`类。它的实现比较关键的就是考虑`hit`函数和构造函数。
+对于前者主要是要递归地判断左节点和右节点是否有hit中；而对于后者，则是需要考虑怎么将一个list进行分类，作为`bvh_node`的左右节点。代码如下。
+```c++
+
+#include "hitable.h"
+
+class bvh_node : public hitable {
+
+public:
+    bvh_node() {}
+    bvh_node(hitable **l, int n, float time0, float time1);
+    virtual bool hit(const ray& r, float tmin, float tmax, hit_record& rec) const;
+    virtual bool bounding_box(float t0, float t1, aabb& box) const;
+    hitable *left;
+    hitable *right;
+    aabb box;
+};
+
+bool bvh_node::bounding_box(float t0, float t1, aabb& b) const {
+    b = box;
+    return true;
+}
+
+bool bvh_node::hit(const ray&r, float t_min, float t_max, hit_record& rec) const {
+    if (box.hit(r, t_min, t_max)){
+        hit_record left_rec, right_rec;
+        bool hit_left = left->hit(r, t_min, t_max, left_rec);
+        bool hit_right = right->hit(r, t_min, t_max, right_rec);
+        if (hit_left && hit_right){
+            if (left_rec.t < right_rec.t)
+                rec = left_rec;
+            else
+                rec = right_rec;
+            return true;
+        }else if (hit_left){
+            rec = left_rec;
+            return true;
+        }else if (hit_right){
+            rec = right_rec;
+            return true;
+        }else
+        return false;
+    }
+    else
+        return false;
+}
+
+int box_x_compare(const void* a, const void *b){
+    aabb box_left, box_right;
+    hitable *ah = *(hitable**)a;
+    hitable *bh = *(hitable**)b;
+    if (!ah->bounding_box(0, 0, box_left) || !bh->bounding_box(0, 0, box_right))
+        std::cerr << "no bounding box in bvh_node constructor\n";
+    if (box_left.min().x() - box_right.min().x() < 0.0)
+        return -1;
+    else
+        return 1;
+}
+
+int box_y_compare(const void* a, const void *b){
+
+}
+
+int box_z_compare(const void* a, const void *b){
+
+}
+
+bvh_node::bvh_node(hitable **l, int n, float time0, float time1){
+    int axis = int(3*drand48());
+    if (axis == 0)
+        qsort(l, n, sizeof(hitable *), box_x_compare);
+    else if (axis == 1)
+        qsort(l, n, sizeof(hitable *), box_y_compare);
+    else
+        qsort(l, n, sizeof(hitable *), box_z_compare);
+    if (n == 1){
+        left = right = l[0];
+    }else if (n == 2){
+        left = l[0];
+        right = l[1];
+    }else{
+        left = new bvh_node(l, n/2, time0, time1);
+        right = new bvh_node(l + n/2, n - n/2, time0, time1);
+    }
+    aabb box_left,box_right;
+    if (!left->bounding_box(time0, time1, box_left) || !right->bounding_box(time0, time1, box_right))
+        std::cerr << "no bounding box in bvh_node constructor\n";
+    box = surrounding_box(box_left, box_right);
+}
+```
+作者对bvh_node的构造分为`n`为1和2以及其他的情况，边界考虑得比较清楚。
+以上，现在就可以将bvh_node用到之前的代码中了。等下次我再试试看效率变化是否明显。
