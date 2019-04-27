@@ -248,7 +248,9 @@ public:
 3. 2-7 Instances ：实现cornell box的实例化
 4. 2-8 Volumes：烟雾相关的内容
 5. 2-9 A Scene Testing All New Features：本书相关总结
+
 而unity shader相关的内容计划如下:
+
 1. U-5 开始Unity Shader学习之旅
 2. U-6 Unity中的基础光照
 3. U-7 基础纹理
@@ -260,4 +262,5 @@ public:
 9. U-13 使用深度和法线纹理
 10. U-14 非真实感渲染
 11. U-15 使用噪声
+
 如果以上内容都完成，下一步会考虑PBR或者其他相关Unity Shader的比较有意思的内容。
